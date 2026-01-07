@@ -3,6 +3,7 @@
   "displayName": "Go Starter Tool",
   "description": "A starter tool for building Go applications",
   "version": "0.0.1",
+  "publisher": "AhmadFathan",
   "engines": {
     "vscode": "^1.107.0"
   },
