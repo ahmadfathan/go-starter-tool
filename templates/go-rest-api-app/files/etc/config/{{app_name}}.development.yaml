@@ -1,0 +1,13 @@
+host: "127.0.0.1"
+port: 8080
+
+db:
+  host: YOUR_DATABASE_HOST
+  port: 5432
+  name: YOUR_DATABASE_NAME
+  user: YOUR_DATABASE_USER
+  password: YOUR_DATABASE_PASSWORD
+
+redis:
+  host: YOUR_REDIS_HOST
+  port: 6379
