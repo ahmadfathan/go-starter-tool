@@ -3,168 +3,209 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 
-	"{{module_name}}/internal/config"
-
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
+	"{{module_name}}/internal/config"
+	infraredis "{{module_name}}/internal/infrastructure/redis"
 	"{{module_name}}/internal/infrastructure/router"
 	"{{module_name}}/internal/logger"
 	"{{module_name}}/internal/transport/http/middleware"
 	"{{module_name}}/pkg/encryption"
-
-	"github.com/gin-gonic/gin"
-
-	"github.com/joho/godotenv"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-
-	infraredis "{{module_name}}/internal/infrastructure/redis"
 )
 
-const (
-	appName = "{{app_name}}"
-)
+const appName = "{{app_name}}"
 
-func runApp(
-	debug bool,
-	appConfig config.AppConfig,
-	db *gorm.DB,
-	redisCli *redis.Client,
-) error {
-
-	// create DAOs
-
-	// create repositories
-
-	// create usecases
-
-	// create controllers
-
-	globalMiddlewares := []gin.HandlerFunc{
-		middleware.ErrorMiddleware(),
-		// add more middleware here
-	}
-
-	r := router.InitializeRouter(
-		debug,
-		globalMiddlewares,
-		router.HandlerOpt{
-			HTTPMethod: http.MethodPost, RelativePath: "/",
-			Handlers: []gin.HandlerFunc{},
-		},
-	)
-
-	host := config.Env("HOST", appConfig.Host)
-
-	port := appConfig.Port
-	if portStr := config.Env("PORT", ""); portStr != "" {
-		parsedPort, err := strconv.ParseInt(portStr, 10, 32)
-		if err != nil {
-			return fmt.Errorf("invalid PORT value %q: %w", portStr, err)
-		}
-		port = int(parsedPort)
-	}
-
-	address := fmt.Sprintf("%s:%d", host, port)
-
-	return r.Run(address)
+type App struct {
+	Debug      bool
+	Config     config.AppConfig
+	DB         *gorm.DB
+	Redis      *redis.Client
+	Logger     *slog.Logger
+	HTTPServer *gin.Engine
 }
 
 func main() {
-	// Load .env file
-	err := godotenv.Load()
+	loadEnv()
+
+	app, err := bootstrapApp()
 	if err != nil {
-		log.Println("No .env file found, using system env")
+		log.Fatalf("failed to bootstrap app: %v", err)
 	}
 
+	if err := app.Run(); err != nil {
+		app.Logger.
+			With("component", "main", "error", err).
+			Error("application stopped with error")
+	}
+}
+
+/*
+|--------------------------------------------------------------------------
+| Bootstrap
+|--------------------------------------------------------------------------
+*/
+
+func bootstrapApp() (*App, error) {
 	debug := os.Getenv("DEBUG") == "true"
 
-	// Init logger
-	log := logger.New(
+	log := initLogger(debug)
+
+	// ✅ MUST be initialized before loading config
+	if err := initEncryptionKey(); err != nil {
+		log.
+			With("component", "encryption", "error", err).
+			Error("failed to initialize encryption key")
+		return nil, err
+	}
+
+	cfg, err := loadConfig(log)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := initDatabase(cfg)
+	if err != nil {
+		log.
+			With("component", "database", "error", err).
+			Error("failed to initialize database")
+		return nil, err
+	}
+
+	redisCli, err := initRedis(cfg)
+	if err != nil {
+		log.
+			With("component", "redis", "error", err).
+			Error("failed to initialize redis")
+		return nil, err
+	}
+
+	httpServer := initHTTPServer(debug)
+
+	return &App{
+		Debug:      debug,
+		Config:     cfg,
+		DB:         db,
+		Redis:      redisCli,
+		Logger:     log,
+		HTTPServer: httpServer,
+	}, nil
+}
+
+/*
+|--------------------------------------------------------------------------
+| App Runtime
+|--------------------------------------------------------------------------
+*/
+
+func (a *App) Run() error {
+	address := resolveAddress(a.Config)
+
+	a.Logger.
+		With("address", address).
+		Info("starting HTTP server")
+
+	return a.HTTPServer.Run(address)
+}
+
+/*
+|--------------------------------------------------------------------------
+| Initializers
+|--------------------------------------------------------------------------
+*/
+
+func loadEnv() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using system env")
+	}
+}
+
+func initLogger(debug bool) *slog.Logger {
+	return logger.New(
 		appName,
 		string(config.CurrentEnv()),
 		debug,
 	)
+}
 
-	// Set the key once at app start (32 bytes for AES-256)
-	encryptionKey := config.Env("ENC_KEY", "")
-
-	err = encryption.SetKey([]byte(encryptionKey))
-	if err != nil {
-		log.
-			With(
-				"component", "main",
-				"error", err,
-			).
-			Error("failed to set encryption key")
-		os.Exit(1)
+func initEncryptionKey() error {
+	key := config.Env("ENC_KEY", "")
+	if key == "" {
+		return fmt.Errorf("ENC_KEY is not set")
 	}
 
-	// Load config
-	appConfig, err := config.LoadConfig(appName)
+	return encryption.SetKey([]byte(key))
+}
+
+func loadConfig(log *slog.Logger) (config.AppConfig, error) {
+	cfg, err := config.LoadConfig(appName)
 	if err != nil {
 		log.
-			With(
-				"component", "main",
-				"error", err,
-			).
+			With("component", "config", "error", err).
 			Error("failed to load config")
-		os.Exit(1)
 	}
+	return cfg, err
+}
 
-	// Connect to DB
+func initDatabase(cfg config.AppConfig) (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
-		appConfig.DB.Host,
-		appConfig.DB.User,
-		appConfig.DB.Password,
-		appConfig.DB.Name,
-		appConfig.DB.Port,
+		cfg.DB.Host,
+		cfg.DB.User,
+		cfg.DB.Password,
+		cfg.DB.Name,
+		cfg.DB.Port,
 	)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.
-			With(
-				"component", "main",
-				"error", err,
-			).
-			Error("failed to connect to the database")
-		os.Exit(1)
-	}
+	return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+}
 
-	// Create redis client
-	redisCli, err := infraredis.NewRedisClient(infraredis.Config{
-		Host: appConfig.Redis.Host,
-		Port: appConfig.Redis.Port,
+func initRedis(cfg config.AppConfig) (*redis.Client, error) {
+	return infraredis.NewRedisClient(infraredis.Config{
+		Host: cfg.Redis.Host,
+		Port: cfg.Redis.Port,
 	})
-	if err != nil {
-		log.
-			With(
-				"component", "main",
-				"error", err,
-			).
-			Error("failed to create redis client")
-		os.Exit(1)
+}
+
+func initHTTPServer(debug bool) *gin.Engine {
+	globalMiddlewares := []gin.HandlerFunc{
+		middleware.ErrorMiddleware(),
 	}
 
-	err = runApp(
+	return router.InitializeRouter(
 		debug,
-		appConfig,
-		db,
-		redisCli,
+		globalMiddlewares,
+		router.HandlerOpt{
+			HTTPMethod:   http.MethodPost,
+			RelativePath: "/",
+			Handlers:     []gin.HandlerFunc{},
+		},
 	)
+}
 
-	if err != nil {
-		log.
-			With(
-				"component", "main",
-				"error", err,
-			).
-			Error("failed to start the app")
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
+func resolveAddress(cfg config.AppConfig) string {
+	host := config.Env("HOST", cfg.Host)
+
+	port := cfg.Port
+	if portStr := config.Env("PORT", ""); portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			port = p
+		}
 	}
+
+	return fmt.Sprintf("%s:%d", host, port)
 }
