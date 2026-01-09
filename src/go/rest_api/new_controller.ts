@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fse from 'fs-extra';
+import { snakeToPascal } from '../../utils';
 
 export async function createNewController() {
     try {
@@ -37,8 +38,8 @@ export async function createNewController() {
         );
 
         // Normalize controller name (Go-style exported struct)
-        const controllerNameCapitalized = controllerName.charAt(0).toUpperCase() + controllerName.slice(1);
-        const controllerStructName = controllerNameCapitalized + 'Controller';
+        const controllerNamePascalCase = snakeToPascal(controllerName);
+        const controllerStructName = controllerNamePascalCase + 'Controller';
 
         const typesFilePath = path.join(controllerPath, 'types.go');
         const controllerFilePath = path.join(
@@ -90,23 +91,23 @@ package controller
 
 import "github.com/gin-gonic/gin"
 
-func (c *${controllerStructName}) Create${controllerNameCapitalized}(ctx *gin.Context) {
+func (c *${controllerStructName}) Create${controllerNamePascalCase}(ctx *gin.Context) {
     // implement create
 }
 
-func (c *${controllerStructName}) Get${controllerNameCapitalized}(ctx *gin.Context) {
+func (c *${controllerStructName}) Get${controllerNamePascalCase}(ctx *gin.Context) {
     // implement get
 }
 
-func (c *${controllerStructName}) Get${controllerNameCapitalized}List(ctx *gin.Context) {
+func (c *${controllerStructName}) Get${controllerNamePascalCase}List(ctx *gin.Context) {
     // implement list
 }
 
-func (c *${controllerStructName}) Update${controllerNameCapitalized}(ctx *gin.Context) {
+func (c *${controllerStructName}) Update${controllerNamePascalCase}(ctx *gin.Context) {
     // implement update
 }
 
-func (c *${controllerStructName}) Delete${controllerNameCapitalized}(ctx *gin.Context) {
+func (c *${controllerStructName}) Delete${controllerNamePascalCase}(ctx *gin.Context) {
     // implement delete
 }
 `;
