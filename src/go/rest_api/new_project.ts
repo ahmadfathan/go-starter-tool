@@ -42,7 +42,8 @@ export async function createNewProject(extensionPath: string) {
             const folder = await vscode.window.showOpenDialog({
                 canSelectFolders: true,
                 canSelectFiles: false,
-                canSelectMany: false
+                canSelectMany: false,
+                openLabel: "Generate into this folder"
             });
 
             if (!folder?.length) return;
