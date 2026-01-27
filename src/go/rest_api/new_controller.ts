@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fse from 'fs-extra';
-import { snakeToPascal } from '../../utils';
+import { pascalToCamel, pascalToSnakeSmart, snakeToPascal } from '../../utils';
 
 export async function createNewController() {
     try {
@@ -16,8 +16,8 @@ export async function createNewController() {
 
         // Ask controller name
         const controllerName = await vscode.window.showInputBox({
-            prompt: 'Enter controller name',
-            placeHolder: 'outlet',
+            prompt: 'Enter controller name (PascalCase)',
+            placeHolder: 'OutletProduct',
             validateInput: (value) => {
                 if (!value?.trim()) return 'Controller name cannot be empty';
                 if (value.includes('/') || value.includes('\\')) {
@@ -38,13 +38,14 @@ export async function createNewController() {
         );
 
         // Normalize controller name (Go-style exported struct)
-        const controllerNamePascalCase = snakeToPascal(controllerName);
-        const controllerStructName = controllerNamePascalCase + 'Controller';
+        const controllerStructName = controllerName; // controllerName already PascalCase
+
+        const controllerFileName = `${pascalToSnakeSmart(controllerName)}.go`;
 
         const typesFilePath = path.join(controllerPath, 'types.go');
         const controllerFilePath = path.join(
             controllerPath,
-            `${controllerName}.go`
+            controllerFileName
         );
 
         // Ensure controller directory exists
@@ -65,7 +66,7 @@ export async function createNewController() {
 // ${controllerStructName} handles ${controllerName} related HTTP requests
 type ${controllerStructName} struct {}
 
-func New${controllerStructName}() *${controllerStructName} {
+func New${controllerStructName}Controller() *${controllerStructName} {
 	return &${controllerStructName}{}
 }
 `;
@@ -79,10 +80,10 @@ func New${controllerStructName}() *${controllerStructName} {
         }
 
         /*
-            2. Create {{controllerName}}.go
+            2. Create controller file
         */
         if (await fse.pathExists(controllerFilePath)) {
-            throw new Error(`${controllerName}.go already exists`);
+            throw new Error(`${controllerFileName} already exists`);
         }
 
         const controllerFileContent = 
@@ -91,23 +92,23 @@ package controller
 
 import "github.com/gin-gonic/gin"
 
-func (c *${controllerStructName}) Create${controllerNamePascalCase}(ctx *gin.Context) {
+func (c *${controllerStructName}) Create${controllerStructName}(ctx *gin.Context) {
     // implement create
 }
 
-func (c *${controllerStructName}) Get${controllerNamePascalCase}(ctx *gin.Context) {
+func (c *${controllerStructName}) Get${controllerStructName}(ctx *gin.Context) {
     // implement get
 }
 
-func (c *${controllerStructName}) Get${controllerNamePascalCase}List(ctx *gin.Context) {
+func (c *${controllerStructName}) Get${controllerStructName}List(ctx *gin.Context) {
     // implement list
 }
 
-func (c *${controllerStructName}) Update${controllerNamePascalCase}(ctx *gin.Context) {
+func (c *${controllerStructName}) Update${controllerStructName}(ctx *gin.Context) {
     // implement update
 }
 
-func (c *${controllerStructName}) Delete${controllerNamePascalCase}(ctx *gin.Context) {
+func (c *${controllerStructName}) Delete${controllerStructName}(ctx *gin.Context) {
     // implement delete
 }
 `;

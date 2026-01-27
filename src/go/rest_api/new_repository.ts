@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fse from 'fs-extra';
-import { snakeToPascal } from '../../utils';
+import { pascalToCamel, pascalToSnakeSmart, snakeToPascal } from '../../utils';
 
 export async function createNewRepository() {
     try {
@@ -16,8 +16,8 @@ export async function createNewRepository() {
 
         // Ask repository name
         const repositoryName = await vscode.window.showInputBox({
-            prompt: 'Enter repository name',
-            placeHolder: 'outlet',
+            prompt: 'Enter repository name (PascalCase)',
+            placeHolder: 'OutletProduct',
             validateInput: (value) => {
                 if (!value?.trim()) return 'Repository name cannot be empty';
                 if (value.includes('/') || value.includes('\\') ||  value.includes(' ')) {
@@ -44,17 +44,18 @@ export async function createNewRepository() {
         );
 
         // Normalize usecase name (Go-style exported struct)
-        const repositoryNamePascalCase = snakeToPascal(repositoryName);
-        const repositoryStructName = repositoryNamePascalCase + 'Repository';
+        const repoStructName = repositoryName; // repositoryName already PascalCase
+
+        const repoFileName = `${pascalToSnakeSmart(repositoryName)}.go`;
 
         const domainRepositoryFilePath = path.join(
             domainRepositoryPath,
-            `${repositoryName}.go`
+            repoFileName
         );
         
         const infraRepositoryFilePath = path.join(
             infraRepositoryPath,
-            `${repositoryName}.go`
+            repoFileName
         );
 
         // Ensure repository directory exists
@@ -72,7 +73,7 @@ export async function createNewRepository() {
 `
 package repository
 
-type ${repositoryStructName} interface {}
+type ${repoStructName} interface {}
 `;
 
         await fse.writeFile(domainRepositoryFilePath, domainRepositoryFileContent);
@@ -88,10 +89,10 @@ type ${repositoryStructName} interface {}
 `
 package repository
 
-type ${repositoryStructName} struct {}
+type ${repoStructName} struct {}
 
-func New${repositoryStructName}() *${repositoryStructName} {
-	return &${repositoryStructName}{}
+func New${repoStructName}Repository() *${repoStructName} {
+	return &${repoStructName}{}
 }
 `;
 
