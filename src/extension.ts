@@ -5,6 +5,7 @@ import { createNewProject } from './go/rest_api/new_project';
 import { createNewController } from './go/rest_api/new_controller';
 import { createNewUseCase } from './go/rest_api/new_usecase';
 import { createNewRepository } from './go/rest_api/new_repository';
+import { createNewDAO } from './go/rest_api/new_dao';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -43,12 +44,18 @@ export function activate(context: vscode.ExtensionContext) {
         createNewRepository
     );
 
+    const newDAOCmd = vscode.commands.registerCommand(
+        'go-starter-tool.newDAO',
+        createNewDAO
+    );
+
     context.subscriptions.push(
         helloWorldCmd,
         newProjectCmd,
         newControllerCmd,
         newUseCaseCmd,
         newRepositoryCmd,
+        newDAOCmd,
     );
 }
 

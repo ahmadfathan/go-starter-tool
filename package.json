@@ -2,7 +2,7 @@
   "name": "go-starter-tool",
   "displayName": "Go Starter Tool",
   "description": "A starter tool for building Go applications",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "AhmadFathan",
   "engines": {
     "vscode": "^1.107.0"
@@ -33,6 +33,10 @@
       {
         "command": "go-starter-tool.newRepository",
         "title": "Go Starter Tool: New Repository"
+      },
+      {
+        "command": "go-starter-tool.newDAO",
+        "title": "Go Starter Tool: New DAO"
       }
     ]
   },

@@ -142,6 +142,45 @@ export function snakeToPascal(str: string): string {
     .join('');
 }
 
+export function snakeToCamel(str: string): string {
+  return toCamelCase(str);
+}
+
+export function pascalToSnakeSmart(str: string): string {
+    const allowedTwoLetterWords = new Set([
+        'if', 'in', 'is', 'it', 'on', 'up', 'do', 'to', 'at', 'by', 'of', 'or', 'as', 'he', 'me', 'we', 'my', 'no', 'so'
+    ]);
+
+    // Match word boundaries for PascalCase + acronyms
+    const words = str.match(
+        /([A-Z]+(?=[A-Z][a-z])|[A-Z][a-z]+|[A-Z]+)/g
+    );
+
+    if (!words) return str.toLowerCase();
+
+    const result: string[] = [];
+    let i = 0;
+
+    while (i < words.length) {
+        let word = words[i];
+
+        // If the word is 2 letters and not allowed, merge with next word
+        if (word.length === 2 && !allowedTwoLetterWords.has(word.toLowerCase()) && i + 1 < words.length) {
+            word += words[i + 1];
+            i++; // Skip the next word since it's merged
+        }
+
+        result.push(word.toLowerCase());
+        i++;
+    }
+
+    return result.join('_');
+}
+
+export function pascalToCamel(str: string): string {
+    if (!str) return str;
+    return str.charAt(0).toLowerCase() + str.slice(1);
+}
 
 function toCamelCase(str: string): string {
     return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
