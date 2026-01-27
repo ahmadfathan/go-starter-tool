@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fse from 'fs-extra';
-import { snakeToPascal } from '../../utils';
+import { pascalToCamel, pascalToSnakeSmart, snakeToPascal } from '../../utils';
 
 export async function createNewUseCase() {
     try {
@@ -16,8 +16,8 @@ export async function createNewUseCase() {
 
         // Ask usecase name
         const usecaseName = await vscode.window.showInputBox({
-            prompt: 'Enter usecase name',
-            placeHolder: 'get_outlet_list',
+            prompt: 'Enter usecase name (PascalCase)',
+            placeHolder: 'GetOutletList',
             validateInput: (value) => {
                 if (!value?.trim()) return 'Usecase name cannot be empty';
                 if (value.includes('/') || value.includes('\\') ||  value.includes(' ')) {
@@ -36,22 +36,24 @@ export async function createNewUseCase() {
         );
 
         // Normalize usecase name (Go-style exported struct)
-        const usecaseNamePascalCase = snakeToPascal(usecaseName);
-        const usecaseStructName = usecaseNamePascalCase + 'UseCase';
+        const usecaseStructName = usecaseName // usecaseName already PascalCase
+        const usecaseStructValueName =  pascalToCamel(usecaseName)
+
+        const usecaseFileName = `${pascalToSnakeSmart(usecaseName)}.go`
 
         const usecaseFilePath = path.join(
             usecasePath,
-            `${usecaseName}.go`
+            usecaseFileName
         );
 
         // Ensure usecase directory exists
         await fse.ensureDir(usecasePath);
 
         /*
-            1. Create {{usecaseName}}.go
+            1. Create usecase file
         */
         if (await fse.pathExists(usecaseFilePath)) {
-            throw new Error(`${usecaseName}.go already exists`);
+            throw new Error(`${usecaseFileName} already exists`);
         }
 
         const usecaseFileContent = 
@@ -73,7 +75,7 @@ type ${usecaseStructName}Output struct {
 type ${usecaseStructName} struct {
 }
 
-func New${usecaseStructName}() *${usecaseStructName} {
+func New${usecaseStructName}UseCase() *${usecaseStructName} {
 	return &${usecaseStructName}{}
 }
 
